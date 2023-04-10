@@ -1,0 +1,283 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import sqlite3
+from pathlib import Path as Path
+edx_course_descriptions = pd.read_csv('edx_courses.csv')
+edx_course_descriptions.tail(3)
+edx_user_data = pd.read_csv('EDX_1_2016.csv')
+edx_user_data.head(3)
+edx_course_descriptions.dtypes
+edx_course_descriptions['n_enrolled'] = edx_course_descriptions['n_enrolled'].str.replace(',','')
+edx_course_descriptions['price'] = edx_course_descriptions['price'].str.replace('FREE-Add a Verified Certificate for', '')
+edx_course_descriptions['price'] = edx_course_descriptions['price'].str.replace('$', '')
+edx_course_descriptions['price'] = edx_course_descriptions['price'].str.replace('USD', '')
+edx_course_descriptions['course_length'] = edx_course_descriptions['course_length'].str.replace('Weeks', '')
+edx_course_descriptions['n_enrolled'] = edx_course_descriptions['n_enrolled'].fillna(0)
+edx_course_descriptions['n_enrolled'] = edx_course_descriptions['n_enrolled'].astype(int)
+edx_course_descriptions['price'] = edx_course_descriptions['price'].astype(float)
+edx_course_descriptions['course_length'] = edx_course_descriptions['course_length'].astype(int)
+edx_course_descriptions.isna().sum()
+edx_course_descriptions['summary'] = edx_course_descriptions['summary'].fillna('Unlisted')
+edx_course_descriptions['instructors'] = edx_course_descriptions['instructors'].fillna('Unlisted')
+edx_course_descriptions['subtitles'] = edx_course_descriptions['subtitles'].fillna('English')
+edx_course_descriptions['course_description'] = edx_course_descriptions['course_description'].fillna('Unlisted')
+edx_course_descriptions['course_syllabus'] = edx_course_descriptions['course_syllabus'].fillna('Unlisted')
+edx_course_descriptions.tail(3)
+del edx_course_descriptions['course_url']
+edx_course_descriptions.tail(3)
+edx_course_descriptions['Level'] = edx_course_descriptions['Level'].astype('category')
+edx_course_descriptions['Level'] = edx_course_descriptions['Level'].cat.codes
+edx_course_descriptions['course_type'] = edx_course_descriptions['course_type'].astype('category')
+edx_course_descriptions['course_type'] = edx_course_descriptions['course_type'].cat.codes
+edx_course_descriptions.dtypes
+edx_user_data['Launch Date'] = pd.to_datetime(edx_user_data['Launch Date'])
+edx_course_descriptions.describe()
+edx_course_descriptions['subject'].value_counts()
+edx_course_description_csv = edx_course_descriptions.to_csv("edx_course_description_for_bq.csv")
+Path('edx_course_descriptions.db').touch()
+edx_conn = sqlite3.connect('edx_course_descriptions.db')
+edx_cursor = edx_conn.cursor()
+edx_course_descriptions.to_sql('edx_course_descriptions', edx_conn, if_exists='append', index=False)
+edx_description_init_query = pd.read_sql(''' SELECT * FROM edx_course_descriptions ''', edx_conn)
+edx_description_init_query
+data_analysis_query = pd.read_sql(''' SELECT title, price, course_effort, n_enrolled, institution 
+                                      FROM edx_course_descriptions
+                                      WHERE subject == 'Data Analysis & Statistics'
+                                      ORDER BY price DESC LIMIT 15 ''', edx_conn)
+data_analysis_query
+sns.barplot(x = 'price', y = 'title', data = data_analysis_query, color = 'blue', edgecolor='black')
+sns.barplot(x = 'n_enrolled', y = 'title', data = data_analysis_query, color = 'blue', edgecolor='black')
+sns.barplot(x = 'price', y = 'n_enrolled', data = data_analysis_query, color = 'blue', edgecolor = 'black', ci=False)
+data_analysis_query.mean()
+data_analysis_python = pd.read_sql(''' SELECT title, price, course_effort, n_enrolled, institution
+                                       FROM edx_course_descriptions
+                                       WHERE title LIKE '%Python'
+                                       ORDER BY price DESC  ''', edx_conn)
+data_analysis_python
+sns.barplot(x = 'price', y = 'n_enrolled', data = data_analysis_python, color = 'orange', edgecolor='black', ci=False)
+data_analysis_prog = pd.read_sql(''' SELECT title, price, course_effort, n_enrolled, institution
+                                       FROM edx_course_descriptions
+                                       WHERE title LIKE '%Programming'
+                                       ORDER BY price DESC  ''', edx_conn)
+data_analysis_prog
+data_analysis_stat = pd.read_sql(''' SELECT title, price, course_effort, n_enrolled, institution
+                                     FROM edx_course_descriptions
+                                     WHERE title LIKE '%Statistics'
+                                     ORDER BY price DESC ''', edx_conn)
+data_analysis_stat
+data_analysis_prob = pd.read_sql(''' SELECT title, price, course_effort, n_enrolled, institution
+                                     FROM edx_course_descriptions
+                                     WHERE title LIKE '%Probability' AND title NOT LIKE '%MathTrackX: Probability'
+                                     ORDER BY price DESC ''', edx_conn)
+data_analysis_prob
+comp_sci_query = pd.read_sql(''' SELECT title, price, course_effort, n_enrolled, institution
+                                 FROM edx_course_descriptions WHERE subject == 'Computer Science'
+                                 ORDER BY price DESC LIMIT 15 ''', edx_conn)
+comp_sci_query
+sns.barplot(x = 'price', y = 'title', data = comp_sci_query, color = 'orange', edgecolor='black', ci=False)
+sns.barplot(x = 'n_enrolled', y = 'title', data = comp_sci_query, color = 'orange', edgecolor='black', ci=False)
+sns.barplot(x = 'price', y = 'n_enrolled', data = comp_sci_query, color = 'orange', edgecolor='black', ci=False)
+data_analysis_tot = pd.read_sql(''' SELECT SUM(n_enrolled) AS total_program_enrollment, COUNT(title) AS num_courses, AVG(price) AS avg_course_purchase, MIN(price) AS min_course_purchase, MAX(price) AS max_course_purchase
+                                    FROM edx_course_descriptions 
+                                    WHERE subject == 'Data Analysis & Statistics'
+                                    ORDER BY price DESC ''', edx_conn)
+data_analysis_tot
+comp_sci_tot = pd.read_sql(''' SELECT SUM(n_enrolled) AS total_program_enrollment, COUNT(title) AS num_courses, AVG(price) AS avg_course_purchase, MIN(price) AS min_course_purchase, MAX(price) AS max_course_purchase
+                               FROM edx_course_descriptions
+                               WHERE subject == 'Computer Science'
+                               ORDER BY price DESC ''', edx_conn)
+comp_sci_tot
+edx_tot = pd.read_sql(''' SELECT SUM(n_enrolled) AS total_edx_enrollment, COUNT(title) AS total_courses, AVG(price) AS total_avg
+                          FROM edx_course_descriptions
+                          ORDER BY price DESC ''', edx_conn)
+edx_tot
+business_tot = pd.read_sql(''' SELECT SUM(n_enrolled) AS total_business_enrollment, COUNT(title) AS total_courses, AVG(price) AS avg_course_purchase, MIN(price) AS min_course_purchase, MAX(price) AS max_course_purchase 
+                               FROM edx_course_descriptions
+                               WHERE subject == 'Business & Management'
+                               ORDER BY price DESC ''', edx_conn)
+business_tot
+engineering_tot = pd.read_sql(''' SELECT SUM(n_enrolled) AS total_engineering_enrollment, COUNT(title) AS total_courses, AVG(price) AS avg_course_purchase, MIN(price) AS min_course_purchase, MAX(price) AS max_course_purchase
+                               FROM edx_course_descriptions
+                               WHERE subject == 'Engineering'
+                               ORDER BY price DESC ''', edx_conn)
+engineering_tot
+ed_tot = pd.read_sql(''' SELECT SUM(n_enrolled) AS total_education_enrollment, COUNT(title) AS total_courses, AVG(price) AS avg_course_purchase, MIN(price) AS min_course_purchase, MAX(price) AS max_course_purchase
+                               FROM edx_course_descriptions
+                               WHERE subject == 'Education & Teacher Training'
+                               ORDER BY price DESC ''', edx_conn)
+ed_tot
+law_tot = pd.read_sql(''' SELECT SUM(n_enrolled) AS total_law_enrollment, COUNT(title) AS total_courses, AVG(price) AS avg_course_purchase, MIN(price) AS min_course_purchase, MAX(price) AS max_course_purchase
+                               FROM edx_course_descriptions
+                               WHERE subject == 'Law'
+                               ORDER BY price DESC ''', edx_conn)
+law_tot
+econ_tot = pd.read_sql(''' SELECT SUM(n_enrolled) AS total_economics_enrollment, COUNT(title) AS total_courses, AVG(price) AS avg_course_purchase, MIN(price) AS min_course_purchase, MAX(price) AS max_course_purchase
+                               FROM edx_course_descriptions
+                               WHERE subject == 'Economics & Finance'
+                               ORDER BY price DESC ''', edx_conn)
+econ_tot
+by_subject = pd.read_sql(''' SELECT subject, COUNT(subject) AS subject_count,
+                             100 * COUNT(subject) / (SELECT COUNT(*) FROM edx_course_descriptions) AS subject_pct
+                             FROM edx_course_descriptions
+                             GROUP BY subject
+                             ORDER BY subject_pct DESC LIMIT 10''', edx_conn)
+by_subject
+by_subject_csv = by_subject.to_csv('by_subject_csv.csv')
+sns.barplot(x = 'subject_pct', y = 'subject', data = by_subject, color = 'red', edgecolor='black', ci=False)
+edx_by_price = pd.read_sql(''' SELECT price, COUNT(price) AS price_count,
+                           100 * COUNT(price) / (SELECT COUNT(*) FROM edx_course_descriptions) AS price_pct
+                           FROM edx_course_descriptions
+                           GROUP BY price
+                           ORDER BY price_pct DESC LIMIT 10 ''', edx_conn)
+edx_by_price
+edx_price_pct_csv = edx_by_price.to_csv('edx_price_pct.csv')
+sns.barplot(x = 'price', y = 'price_pct', data = by_price, color = 'red', edgecolor='black', ci=False)
+by_course_effort = pd.read_sql(''' SELECT course_effort, COUNT(course_effort) AS num_hours, 
+                                   100 * COUNT(course_effort) / (SELECT COUNT(*) FROM edx_course_descriptions) AS hours_pct
+                                   FROM edx_course_descriptions 
+                                   GROUP BY course_effort
+                                   ORDER BY hours_pct DESC LIMIT 10 ''', edx_conn)
+by_course_effort
+sns.barplot(x = 'hours_pct', y = 'course_effort', data = by_course_effort, color = 'red', edgecolor='black', ci=False)
+by_institution = pd.read_sql(''' SELECT institution, COUNT(institution) AS institution_count,
+                                 100 * COUNT(institution) / (SELECT COUNT(*) FROM edx_course_descriptions) AS institution_pct
+                                 FROM edx_course_descriptions
+                                 GROUP BY institution
+                                 ORDER BY institution_pct DESC LIMIT 10''', edx_conn)
+by_institution
+sns.barplot(x = 'institution_pct', y = 'institution', data = by_institution, color = 'red', edgecolor='black', ci=False)
+by_institution_dsc = pd.read_sql(''' SELECT institution, COUNT(institution) AS institution_count,
+                                 100 * COUNT(institution) / (SELECT COUNT(*) FROM edx_course_descriptions) AS institution_pct
+                                 FROM edx_course_descriptions
+                                 WHERe subject == 'Data Analysis & Statistics'
+                                 GROUP BY institution
+                                 ORDER BY institution_count DESC LIMIT 10''', edx_conn)
+by_institution_dsc 
+sns.barplot(x = 'institution_count', y = 'institution', data = by_institution_dsc, color = 'red', edgecolor='black', ci=False)
+by_institution_comp_sci = pd.read_sql(''' SELECT institution, COUNT(institution) AS institution_count,
+                                 100 * COUNT(institution) / (SELECT COUNT(*) FROM edx_course_descriptions) AS institution_pct
+                                 FROM edx_course_descriptions
+                                 WHERe subject == 'Computer Science'
+                                 GROUP BY institution
+                                 ORDER BY institution_count DESC LIMIT 10''', edx_conn)
+by_institution_comp_sci 
+sns.barplot(x = 'institution_count', y = 'institution', data = by_institution_comp_sci, color = 'red', edgecolor='black', ci=False)
+subject_hundred = pd.read_sql(''' SELECT subject, AVG(price) as avg_price_subject
+                                  FROM edx_course_descriptions
+                                  WHERE price > 100.0 
+                                  GROUP BY subject
+                                  ORDER BY avg_price_subject DESC LIMIT 10''', edx_conn)
+subject_hundred = subject_hundred.round(2)
+subject_hundred
+sns.barplot(x = 'avg_price_subject', y = 'subject', data = subject_hundred, color = 'purple', edgecolor='black', ci=False)
+by_enroll = pd.read_sql(''' SELECT subject, SUM(n_enrolled) AS total_enrollment
+                          FROM edx_course_descriptions 
+                          GROUP BY subject
+                          ORDER BY total_enrollment DESC LIMIT 10 ''', edx_conn)
+by_enroll
+by_enroll_csv = by_enroll.to_csv('by_enroll.csv')
+sns.barplot(x = 'total_enrollment', y = 'subject', data = by_enroll, color = 'purple', edgecolor='black', ci=False)
+by_avg_enroll = pd.read_sql(''' SELECT subject, AVG(n_enrolled) AS avg_enrollment
+                          FROM edx_course_descriptions 
+                          GROUP BY subject
+                          ORDER BY avg_enrollment DESC LIMIT 10 ''', edx_conn)
+by_avg_enroll
+sns.barplot(x = 'avg_enrollment', y = 'subject', data = by_avg_enroll, color = 'purple', edgecolor='black', ci=False)
+Path('edx_behavior.db').touch()
+edx_behavior_conn = sqlite3.connect('edx_behavior.db')
+edx_behavior_cursor = edx_conn.cursor()
+edx_user_data.to_sql('edx_behavior', edx_behavior_conn, if_exists='append', index=False)
+edx_user_data_init_query = pd.read_sql(''' SELECT * FROM edx_behavior LIMIT 5 ''', edx_behavior_conn)
+edx_user_data_init_query
+by_course_subject = pd.read_sql(''' SELECT `Course Subject`, COUNT(`Course Subject`) AS course_subject_count, 
+                                    100 * COUNT(`Course Subject`) / (SELECT COUNT(*) FROM edx_behavior) AS subject_pct
+                                    FROM edx_behavior
+                                    GROUP BY `Course Subject`
+                                    ORDER BY subject_pct DESC ''', edx_behavior_conn)
+by_course_subject
+sns.barplot(x = 'subject_pct', y = 'Course Subject', data = by_course_subject, color = 'blue', edgecolor='black', ci=False)
+udemy = pd.read_csv('udemy_courses.csv')
+udemy
+del udemy['course_id']
+del udemy['url']
+udemy.dtypes
+udemy['published_timestamp'] = pd.to_datetime(udemy['published_timestamp'])
+udemy['level'] = udemy['level'].astype('category')
+udemy['level'] = udemy['level'].cat.codes
+udemy['is_paid'] = udemy['is_paid'].astype('category')
+udemy['is_paid'] = udemy['is_paid'].cat.codes
+udemy
+Path('udemy_updated.db').touch()
+udemy_conn = sqlite3.connect('udemy_updated.db')
+udemy_cursor = udemy_conn.cursor()
+udemy.to_sql('udemy_updated', udemy_conn, if_exists='append', index=False)
+udemy_init_query = pd.read_sql(''' SELECT * FROM udemy_updated ''', udemy_conn)
+udemy_init_query
+udemy_init_query['subject'].value_counts()
+by_subject = pd.read_sql(''' SELECT subject, COUNT(subject) AS subject_count,
+                             100 * COUNT(subject) / (SELECT COUNT(*) FROM udemy_updated) AS subject_pct
+                             FROM udemy_updated
+                             GROUP BY subject
+                             ORDER BY subject_pct DESC ''', udemy_conn)
+by_subject
+sns.barplot(x = 'subject_pct', y = 'subject', data = by_subject, color = 'blue', edgecolor = 'black', ci=False)
+by_price = pd.read_sql(''' SELECT price, COUNT(price) AS subject_count,
+                             100 * COUNT(price) / (SELECT COUNT(*) FROM udemy_updated) AS price_pct
+                             FROM udemy_updated
+                             GROUP BY price
+                             ORDER BY price_pct DESC LIMIT 10 ''', udemy_conn)
+by_price
+sns.barplot(x = 'price', y = 'price_pct', data = by_price, color = 'blue', edgecolor = 'black', ci=False)
+by_price['price'] = by_price['price'].astype(str)
+by_price.dtypes
+udemy_by_price_csv = by_price.to_csv('udemy_by_price.csv')
+udemy_by_price_csv
+by_subs_subject = pd.read_sql(''' SELECT course_title, subject, num_subscribers FROM udemy_updated
+                          GROUP BY subject
+                          ORDER BY num_subscribers DESC ''', udemy_conn)
+
+by_subs_subject
+udemy_by_subs = pd.read_sql(''' SELECT course_title, subject, num_subscribers FROM udemy_updated
+                          ORDER BY num_subscribers DESC LIMIT 10 ''', udemy_conn)
+udemy_by_subs
+sns.barplot(x = 'num_subscribers', y = 'course_title', hue = 'subject', data = udemy_by_subs, color = 'blue', edgecolor='black', ci=False)
+udemy_by_subs_csv = udemy_by_subs.to_csv('udemy_by_subs.csv')
+by_reviews = pd.read_sql(''' SELECT course_title, subject, num_reviews
+                             FROM udemy_updated
+                             ORDER BY num_reviews DESC LIMIT 10''', udemy_conn)
+by_reviews 
+sns.barplot(x = 'num_reviews', y = 'course_title', data = by_reviews, color = 'red', edgecolor = 'black', ci=False)
+reviews_lec = pd.read_sql(''' SELECT course_title, subject, num_lectures, num_reviews
+                             FROM udemy_updated
+                             ORDER BY num_reviews DESC''', udemy_conn)
+reviews_lec
+reviews_lec.dtypes
+sns.scatterplot(x = 'num_lectures', y = 'num_reviews', data = reviews_lec)
+reviews_lec.dtypes
+reviews_duration = pd.read_sql(''' SELECT course_title, subject, num_lectures, num_reviews, content_duration, price
+                             FROM udemy_updated
+                             ORDER BY num_reviews DESC''', udemy_conn)
+reviews_duration
+sns.scatterplot(x = 'content_duration', y = 'num_reviews', data = reviews_duration)
+reviews_duration_csv = reviews_duration.to_csv('udemy_reviews_duration.csv')
+total_enrollment_biz_web = pd.read_sql(''' SELECT subject, num_subscribers, SUM(num_subscribers) AS sum_sub, AVG(price) AS avg_course_price
+                                           FROM udemy_updated
+                                           GROUP BY subject
+                                           ORDER BY sum_sub DESC ''', udemy_conn)
+total_enrollment_biz_web
+tot_price = pd.read_sql(''' SELECT subject, num_subscribers, SUM(num_subscribers) AS sum_sub, AVG(price) AS avg_course_price, SUM(price) AS total_revenue
+                                           FROM udemy_updated
+                                           GROUP BY subject
+                                           ORDER BY sum_sub DESC ''', udemy_conn)
+tot_price
+sns.barplot(x = 'subject', y = 'total_revenue', data = tot_price, color = 'blue', edgecolor = 'black', ci = False)
+plt.xticks(rotation=90)
+sns.barplot(x = 'subject', y = 'avg_course_price', data = tot_price, color = 'blue', edgecolor = 'black', ci = False)
+plt.xticks(rotation=90)
+udemy_tot_price = tot_price.to_csv('udemy_avg_price.csv')
+udemy_search = pd.read_csv('udemy_timeline.csv', skiprows=2)
+udemy_search
+udemy_search['Week'] = pd.to_datetime(udemy_search['Week'])
+udemy_search_csv = udemy_search.to_csv('udemy_search.csv')
